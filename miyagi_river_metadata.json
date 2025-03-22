@@ -1,59 +1,7 @@
 {
   "last_date_value": 20250314,
-  "last_run": "2025-03-21 16:18:40",
-  "total_articles_found": 2724,
-  "total_new_articles": 237,
-  "execution_history": [
-    {
-      "timestamp": "2025-03-21 16:18:40",
-      "articles_found": 227,
-      "new_articles": 2
-    },
-    {
-      "timestamp": "2025-03-21 16:17:27",
-      "articles_found": 227,
-      "new_articles": 2
-    },
-    {
-      "timestamp": "2025-03-21 16:13:43",
-      "articles_found": 227,
-      "new_articles": 2
-    },
-    {
-      "timestamp": "2025-03-21 16:12:31",
-      "articles_found": 227,
-      "new_articles": 0
-    },
-    {
-      "timestamp": "2025-03-21 16:07:05",
-      "articles_found": 227,
-      "new_articles": 0
-    },
-    {
-      "timestamp": "2025-03-21 15:07:10",
-      "articles_found": 227,
-      "new_articles": 0
-    },
-    {
-      "timestamp": "2025-03-21 15:05:40",
-      "articles_found": 227,
-      "new_articles": 2
-    },
-    {
-      "timestamp": "2025-03-21 14:19:53",
-      "articles_found": 227,
-      "new_articles": 2
-    },
-    {
-      "timestamp": "2025-03-21 14:17:43",
-      "articles_found": 227,
-      "new_articles": 0
-    },
-    {
-      "timestamp": "2025-03-21 14:14:16",
-      "articles_found": 227,
-      "new_articles": 0
-    }
-  ],
+  "last_run": "2025-03-22 11:42:38",
+  "total_articles_found": 1816,
+  "total_new_articles": 233,
   "source_url": "https://www.pref.miyagi.jp/life/4/15/49/index.html"
 }

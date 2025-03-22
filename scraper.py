@@ -1,6 +1,5 @@
 import requests
 from bs4 import BeautifulSoup
-import csv
 import datetime
 import os
 import re
@@ -17,9 +16,8 @@ class MiyagiRiverScraper:
         })
         # メタデータを保存するJSONファイル
         self.metadata_file = 'miyagi_river_metadata.json'
-        # 今日の日付をファイル名に使用
-        today = datetime.datetime.now().strftime("%Y%m%d")
-        self.new_articles_csv = f'new_river_articles_{today}.csv'
+        # 通知用のテキストファイル
+        self.output_file = 'notification_output.txt'
 
     def fetch_page(self):
         """ページを取得してBeautifulSoupオブジェクトを返す"""
@@ -111,7 +109,6 @@ class MiyagiRiverScraper:
             "last_run": now.strftime("%Y-%m-%d %H:%M:%S"),  # 最後の実行日時
             "total_articles_found": 0,  # これまでに見つけた記事の総数
             "total_new_articles": 0,  # これまでに見つけた新しい記事の総数
-            "execution_history": [],  # 実行履歴
             "source_url": self.base_url  # ソースURL
         }
     
@@ -138,43 +135,38 @@ class MiyagiRiverScraper:
         metadata["total_articles_found"] += len(articles)
         metadata["total_new_articles"] += len(new_articles)
         
-        # 実行履歴に追加（最新10件のみ保持）
-        execution_record = {
-            "timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "articles_found": len(articles),
-            "new_articles": len(new_articles)
-        }
-        metadata["execution_history"].insert(0, execution_record)
-        metadata["execution_history"] = metadata["execution_history"][:10]  # 最新10件のみ
-        
         return metadata
     
     def find_new_articles(self, articles, last_date_value):
         """前回の最新日付より新しい記事を抽出する"""
         return [article for article in articles if article['date_value'] > last_date_value]
     
-    def save_to_csv(self, articles, filename):
-        """記事情報をCSVファイルに保存する"""
-        if not articles:
-            print(f"保存する記事がありません: {filename}")
+    def generate_notification_text(self, new_articles):
+        """通知用のテキストを生成して保存する"""
+        if not new_articles:
+            # 新しい記事がない場合は空のファイルを作成
+            with open(self.output_file, 'w', encoding='utf-8') as f:
+                f.write("")
             return False
-
+        
         try:
-            with open(filename, 'w', encoding='utf-8', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=['date_str', 'title', 'url'])
-                writer.writeheader()
-                for article in articles:
-                    # date_valueフィールドを除外
-                    row = {
-                        'date_str': article['date_str'],
-                        'title': article['title'],
-                        'url': article['url']
-                    }
-                    writer.writerow(row)
-            print(f"{len(articles)}件の記事を {filename} に保存しました")
+            with open(self.output_file, 'w', encoding='utf-8') as f:
+                for i, article in enumerate(new_articles):
+                    message = f"🌊 宮城県河川情報ニュース速報 🚨\n\n"
+                    message += f"📅 日付: {article['date_str']}\n"
+                    message += f"📰 タイトル: {article['title']}\n"
+                    message += f"🔗 リンク: {article['url']}"
+                    
+                    # 最後の記事でなければ区切り線を追加
+                    if i < len(new_articles) - 1:
+                        message += "\n\n-------------------\n\n"
+                    
+                    f.write(message)
+            
+            print(f"{len(new_articles)}件の通知を {self.output_file} に保存しました")
             return True
         except Exception as e:
-            print(f"CSVファイルの保存中にエラーが発生しました: {e}")
+            print(f"通知テキストの保存中にエラーが発生しました: {e}")
             return False
 
     def run(self):
@@ -190,6 +182,8 @@ class MiyagiRiverScraper:
         soup = self.fetch_page()
         articles = self.extract_articles(soup)
         
+        has_new_articles = False
+        
         if articles:
             print(f"{len(articles)}件の記事が見つかりました")
             
@@ -201,32 +195,33 @@ class MiyagiRiverScraper:
             new_articles = self.find_new_articles(articles, last_date_value)
             print(f"そのうち{len(new_articles)}件が新しい記事です")
             
-            # 新しい記事があれば保存
+            # 新しい記事があれば通知用テキストを生成
             if new_articles:
-                self.save_to_csv(new_articles, self.new_articles_csv)
+                has_new_articles = self.generate_notification_text(new_articles)
             else:
+                # 新しい記事がない場合は空のファイルを作成
+                open(self.output_file, 'w').close()
                 print("新しい記事はありませんでした")
             
             # メタデータを更新して保存
             updated_metadata = self.update_metadata(metadata, articles, new_articles)
             self.save_metadata(updated_metadata)
             
-            return new_articles
+            return has_new_articles
         else:
             print("記事が見つかりませんでした")
             # 記事が見つからなくても、実行記録は残す
             updated_metadata = self.update_metadata(metadata, [], [])
             self.save_metadata(updated_metadata)
-            return []
+            # 空のファイルを作成
+            open(self.output_file, 'w').close()
+            return False
 
 if __name__ == "__main__":
     # スクレイパーを初期化して実行
     scraper = MiyagiRiverScraper()
-    new_articles = scraper.run()
+    has_new_articles = scraper.run()
     
-    # 新しい記事があれば出力
-    if new_articles:
-        print("\n新しい記事:")
-        for article in new_articles:
-            print(f"{article['date_str']} - {article['title']}")
-            print(f"URL: {article['url']}\n")
+    # スクリプトの終了コードで新しい記事があるかどうかを返す
+    # GitHubワークフローで使用可能
+    exit(0 if has_new_articles else 1)

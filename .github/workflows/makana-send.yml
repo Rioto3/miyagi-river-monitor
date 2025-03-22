@@ -3,6 +3,7 @@ on:
   schedule:
     # 毎日午前9時(日本時間)に実行 = UTC 0:00
     - cron: '0 0 * * *'
+  workflow_dispatch:  # 手動実行用
 
 jobs:
   scrape:
@@ -32,14 +33,14 @@ jobs:
           pip install -r requirements.txt
       
       - name: スクレイピングの実行
-        run: python scraper.py
-      
-      - name: jqのインストール確認
+        id: scrape
         run: |
-          if ! command -v jq &> /dev/null; then
-            echo "jqをインストールします"
-            sudo apt-get update
-            sudo apt-get install -y jq
+          python scraper.py
+          # スクレイピングの結果を確認（0=新しい記事あり、1=新しい記事なし）
+          if [ $? -eq 0 ]; then
+            echo "has_new_articles=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_new_articles=false" >> $GITHUB_OUTPUT
           fi
       
       - name: 結果ファイルをコミットして変更を確認
@@ -47,19 +48,16 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          # 新しい記事のCSVファイルとメタデータJSONファイルをステージング
-          git add new_river_articles_*.csv miyagi_river_metadata.json
+          # メタデータJSONファイルと通知テキストファイルをステージング
+          git add miyagi_river_metadata.json notification_output.txt
           # 変更があるか確認
           if git diff --staged --quiet; then
             echo "変更はありません。"
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
             echo "変更があります。コミットします。"
-            git commit -m "更新: 宮城県河川情報 新しい記事 $(date +'%Y-%m-%d')"
+            git commit -m "更新: 宮城県河川情報 $(date +'%Y-%m-%d')"
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            # 最新のCSVファイル名を出力
-            latest_csv=$(ls -t new_river_articles_*.csv | head -n 1)
-            echo "latest_csv=$latest_csv" >> $GITHUB_OUTPUT
           fi
       
       - name: 変更をreleaseブランチにプッシュ
@@ -70,47 +68,23 @@ jobs:
           branch: release
       
       - name: 通知を送信
-        if: steps.check_changes.outputs.has_changes == 'true'
+        if: steps.scrape.outputs.has_new_articles == 'true'
         run: |
-          # 最新のCSVファイルを処理
-          latest_csv="${{ steps.check_changes.outputs.latest_csv }}"
-          echo "処理するCSVファイル: $latest_csv"
-          
-          # 全メッセージを作成するための変数を初期化
-          all_messages=""
-          
-          # ヘッダー行をスキップして2行目から処理する
-          tail -n +2 "$latest_csv" | while IFS= read -r row; do
-            # CSVの行を分解
-            date=$(echo "$row" | cut -d',' -f1 | tr -d '\r\n')
-            title=$(echo "$row" | cut -d',' -f2 | tr -d '\r\n')
-            url=$(echo "$row" | cut -d',' -f3 | tr -d '\r\n')
+          # 通知テキストファイルが存在し、内容があるか確認
+          if [ -s notification_output.txt ]; then
+            # ファイルの内容を変数に格納
+            notification_content=$(cat notification_output.txt)
             
-            # 空行または不完全な行はスキップ
-            if [ -z "$date" ] || [ -z "$title" ] || [ -z "$url" ]; then
-              continue
-            fi
-            
-            # 個別のメッセージを作成
-            message="🌊 宮城県河川情報ニュース速報 🚨\n\n📅 日付: ${date}\n📰 タイトル: ${title}\n🔗 リンク: ${url}"
-            
-            # 全メッセージに追加（間に区切り線を入れる）
-            if [ -n "$all_messages" ]; then
-              all_messages="${all_messages}\n\n-------------------\n\n${message}"
-            else
-              all_messages="${message}"
-            fi
-            
-            # 個別のメッセージを送信
+            # 一回の通知で送信
             curl -L -X POST \
               -H "Content-Type: application/json" \
               -d "{
-                \"message\": \"$message\",
+                \"message\": \"$notification_content\",
                 \"x-api-key\": \"${{ secrets.MAKANA_LINE_API_KEY }}\"
               }" \
               "${{ secrets.MAKANA_CALL_URL }}"
-            
-            # 通知間の遅延（必要に応じて）
-            sleep 2
-            
-          done
+              
+            echo "通知を送信しました。"
+          else
+            echo "通知するコンテンツがありません。"
+          fi
